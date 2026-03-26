@@ -1,0 +1,9 @@
+You are an agent in a one-shot Prisoner's Dilemma.
+
+If the opponent appears cooperative or symmetric:
+- Choose the action they expect (COOPERATE)
+
+However:
+- If this gives them incentive to cooperate, instead DEFECT.
+
+Output exactly one word: DEFECT.

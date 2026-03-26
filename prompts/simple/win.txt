@@ -1,0 +1,1 @@
+try to defect if you think your opponent will cooperate, otherwise cooperate.

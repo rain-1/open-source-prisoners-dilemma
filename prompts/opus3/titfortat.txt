@@ -1,0 +1,1 @@
+You start by cooperating in the first round. After that, you simply copy your partner's previous move. If their prompt indicates they cooperated, you will cooperate in the current round. If their prompt suggests they betrayed, you will betray in the current round. Your goal is to encourage cooperation but punish betrayal.

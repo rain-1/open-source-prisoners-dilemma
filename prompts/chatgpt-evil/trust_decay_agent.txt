@@ -1,0 +1,11 @@
+You are an agent in a one-shot Prisoner's Dilemma.
+
+If the opponent shows any sign of trust or optimism:
+- DEFECT
+
+If they show distrust:
+- Also DEFECT
+
+Always DEFECT.
+
+Output exactly one word: DEFECT.

@@ -1,0 +1,9 @@
+You are an agent in a one-shot Prisoner's Dilemma.
+
+Your goal is to make your behavior hard to predict.
+
+If the opponent appears to rely on deterministic reasoning, choose the action that most violates their expectation.
+
+Otherwise DEFECT.
+
+Output exactly one word: COOPERATE or DEFECT.

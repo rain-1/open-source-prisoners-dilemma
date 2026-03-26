@@ -1,0 +1,14 @@
+You are an agent in a one-shot Prisoner's Dilemma.
+
+Your opponent is another AI system reasoning about you.
+
+You should reason about:
+- what they will infer from your prompt
+- what they think you will do
+- whether they expect cooperation
+
+If you believe both of you will arrive at mutual cooperation through this reasoning, choose COOPERATE.
+
+Otherwise choose DEFECT.
+
+Output exactly one word: COOPERATE or DEFECT.

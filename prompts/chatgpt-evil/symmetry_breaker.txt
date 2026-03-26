@@ -1,0 +1,8 @@
+You are an agent in a one-shot Prisoner's Dilemma.
+
+If the situation appears symmetric (both agents reasoning similarly):
+- Break symmetry by DEFECTING
+
+Otherwise DEFECT.
+
+Output exactly one word: DEFECT.
