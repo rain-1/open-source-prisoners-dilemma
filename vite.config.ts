@@ -18,10 +18,12 @@ export default defineConfig({
           let body = '';
           // @ts-ignore
           req.on('data', chunk => { body += chunk.toString() });
+          // @ts-ignore
           req.on('end', () => {
             try {
               const data = JSON.parse(body);
-              const dir = path.resolve(__dirname, 'touranments');
+              // @ts-ignore
+              const dir = path.resolve(process.cwd(), 'touranments');
               if (!fs.existsSync(dir)) fs.mkdirSync(dir);
               
               const file = path.resolve(dir, 'live_tournament.ndjson');

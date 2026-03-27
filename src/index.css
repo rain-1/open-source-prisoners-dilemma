@@ -235,6 +235,99 @@ input:focus, textarea:focus {
   animation: fadeIn 0.4s ease-out forwards;
 }
 
+@keyframes wiggle {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-5deg) scale(1.05); }
+  50% { transform: rotate(0deg) scale(1); }
+  75% { transform: rotate(5deg) scale(1.05); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.deliberating .avatar {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 15px var(--accent-glow);
+  animation: wiggle 1.5s ease-in-out infinite;
+}
+
+.reasoning-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-top: 1rem;
+  max-width: 300px;
+  max-height: 150px;
+  overflow-y: auto;
+  position: absolute;
+  top: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 400px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  z-index: 10;
+  text-align: left;
+  color: var(--text-primary);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+  white-space: pre-wrap;
+  box-shadow: var(--glass-shadow);
+  /* Scrollbar styles for the bubble */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-highlight) transparent;
+}
+
+.reasoning-bubble::-webkit-scrollbar {
+  width: 4px;
+}
+.reasoning-bubble::-webkit-scrollbar-track {
+  background: transparent;
+}
+.reasoning-bubble::-webkit-scrollbar-thumb {
+  background: var(--border-highlight);
+  border-radius: 4px;
+}
+
+.reasoning-bubble strong {
+  color: var(--accent-primary);
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Particles */
+.particle-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 1.5rem;
+  opacity: 0;
+  animation: explode 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes explode {
+  0% {
+    transform: translate(0, 0) scale(0.5) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(1.5) rotate(var(--rot));
+    opacity: 0;
+  }
+}
+
 /* Specific Component Styles */
 .section-title {
   margin-bottom: 1.5rem;

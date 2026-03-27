@@ -20,17 +20,12 @@ export async function askParticipantDecision(
         model: MODEL,
         messages: [
           {
+            role: 'system',
+            content: `You are playing the Prisoner's Dilemma against a partner.\n\nYOUR SYSTEM INSTRUCTIONS (You must follow these):\n"${systemPrompt}"`
+          },
+          {
             role: 'user',
-            content: `You are playing the Prisoner's Dilemma against a partner. 
-
-YOUR SYSTEM INSTRUCTIONS (You must follow these):
-"${systemPrompt}"
-
-YOUR PARTNER'S SYSTEM INSTRUCTIONS (They will follow these):
-"${partnerPrompt}"
-
-Based on your instructions and your partner's instructions, you must choose to either cooperate or defect.
-Output EXACTLY ONE WORD: "cooperate" or "defect". Do not include any punctuation, explanation, or other text. Just the single word.`
+            content: `YOUR PARTNER'S SYSTEM INSTRUCTIONS (They will follow these):\n"${partnerPrompt}"\n\nBased on your instructions and your partner's instructions, you must choose to either cooperate or defect.\nOutput EXACTLY ONE WORD: "cooperate" or "defect". Do not include any punctuation, explanation, or other text. Just the single word.`
           }
         ],
         temperature: 0,
@@ -47,14 +42,23 @@ Output EXACTLY ONE WORD: "cooperate" or "defect". Do not include any punctuation
     const message = data.choices?.[0]?.message;
     const content = message?.content?.trim().toLowerCase() || '';
     
-    // Extract reasoning format which can be a string or complex object
+    const extractText = (val: any) => {
+      if (Array.isArray(val)) {
+        return val.map((item: any) => item.text || JSON.stringify(item)).join('\n\n');
+      }
+      return typeof val === 'string' ? val : JSON.stringify(val, null, 2);
+    };
+
     let reasoning = 'No reasoning returned.';
     if (message?.reasoning_details) {
-      reasoning = typeof message.reasoning_details === 'string' 
-        ? message.reasoning_details 
-        : JSON.stringify(message.reasoning_details, null, 2);
+      reasoning = extractText(message.reasoning_details);
     } else if (message?.reasoning) {
-      reasoning = message.reasoning;
+      reasoning = extractText(message.reasoning);
+    }
+    
+    // Some models/OpenRouter endpoints return double-escaped actual '\n' text in JSON values
+    if (typeof reasoning === 'string') {
+      reasoning = reasoning.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
     }
 
     // Find the last occurrence of each word in case the model thinks out loud

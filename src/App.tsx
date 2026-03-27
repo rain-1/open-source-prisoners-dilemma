@@ -4,6 +4,39 @@ import { loadPromptFolders, PromptFolder } from './game/defaults';
 import { askParticipantDecision } from './api/openrouter';
 import { generateRoundRobinSchedule, calculateScore } from './game/tournament';
 import { UserPlus, Play, Trophy, Swords, UserX, FolderOpen, X } from 'lucide-react';
+import { generateStandaloneHtml } from './utils/exportHtml';
+
+const ParticleBurst = ({ decision, onComplete }: { decision: string, onComplete: () => void }) => {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 1500);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  const emoji = decision === 'cooperate' ? '🤝' : decision === 'defect' ? '⚔️' : '⚠️';
+  const particles = Array.from({ length: 12 }).map((_, i) => {
+    const angle = (i / 12) * Math.PI * 2;
+    const distance = 50 + Math.random() * 50;
+    const tx = Math.cos(angle) * distance;
+    const ty = Math.sin(angle) * distance;
+    const rot = Math.random() * 360;
+    return (
+      <div 
+        key={i} 
+        className="particle" 
+        style={{ 
+          '--tx': `${tx}px`, 
+          '--ty': `${ty}px`, 
+          '--rot': `${rot}deg`,
+          animationDelay: `${Math.random() * 0.2}s`
+        } as React.CSSProperties}
+      >
+        {emoji}
+      </div>
+    );
+  });
+
+  return <div className="particle-container">{particles}</div>;
+};
 
 const getScoreColor = (score: number) => {
   if (score === 5) return '#10b981'; // Green
@@ -26,9 +59,15 @@ function App() {
   const [matches, setMatches] = useState<{a: string, b: string}[]>([]);
   const [matchResults, setMatchResults] = useState<MatchResult[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-  const [isMatchProcessing, setIsMatchProcessing] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
+  
+  // Match progressing states
+  const [matchPhase, setMatchPhase] = useState<'idle' | 'deliberating' | 'revealing' | 'done'>('idle');
+  const [tempReasoningA, setTempReasoningA] = useState<string | null>(null);
+  const [tempReasoningB, setTempReasoningB] = useState<string | null>(null);
+  const [showParticlesA, setShowParticlesA] = useState(false);
+  const [showParticlesB, setShowParticlesB] = useState(false);
 
   // New participant form state
   const [newName, setNewName] = useState('');
@@ -148,7 +187,7 @@ function App() {
   const logMsg = (msg: string) => setLogs(prev => [...prev, msg]);
 
   useEffect(() => {
-    if (gameState === 'playing' && !isMatchProcessing) {
+    if (gameState === 'playing' && matchPhase === 'idle') {
       if (currentMatchIndex < matches.length) {
         processNextMatch();
       } else if (matches.length > 0) {
@@ -156,29 +195,41 @@ function App() {
         logMsg('Tournament Completed!');
       }
     }
-  }, [gameState, currentMatchIndex, isMatchProcessing, matches]);
+  }, [gameState, currentMatchIndex, matchPhase, matches]);
 
 
   const processNextMatch = async () => {
-    setIsMatchProcessing(true);
+    // Reset temp states
+    setTempReasoningA(null);
+    setTempReasoningB(null);
+    setShowParticlesA(false);
+    setShowParticlesB(false);
+    setMatchPhase('deliberating');
+
     const match = matches[currentMatchIndex];
     const pA = participants.find(p => p.id === match.a)!;
     const pB = participants.find(p => p.id === match.b)!;
 
     logMsg(`Starting match ${currentMatchIndex + 1}: ${pA.name} vs ${pB.name}`);
+    logMsg(`Waiting for responses from both ${pA.name} and ${pB.name}...`);
 
-    // Call OpenRouter API sequentially to avoid rate limits
-    logMsg(`Waiting for ${pA.name} response...`);
-    const resA = await askParticipantDecision(pA.systemPrompt, pB.systemPrompt);
-    logMsg(`[REASONING] ${pA.name}: \n${resA.reasoning}`);
-    logMsg(`${pA.name} raw response: "${resA.rawResponse}"`);
-    logMsg(`${pA.name} decided to ${resA.decision.toUpperCase()}`);
-    
-    logMsg(`Waiting for ${pB.name} response...`);
-    const resB = await askParticipantDecision(pB.systemPrompt, pA.systemPrompt);
-    logMsg(`[REASONING] ${pB.name}: \n${resB.reasoning}`);
-    logMsg(`${pB.name} raw response: "${resB.rawResponse}"`);
-    logMsg(`${pB.name} decided to ${resB.decision.toUpperCase()}`);
+    // Run both queries simultaneously
+    const [resA, resB] = await Promise.all([
+      askParticipantDecision(pA.systemPrompt, pB.systemPrompt).then(res => {
+        logMsg(`[REASONING] ${pA.name}: \n${res.reasoning}`);
+        logMsg(`${pA.name} raw response: "${res.rawResponse}"`);
+        logMsg(`${pA.name} decided to ${res.decision.toUpperCase()}`);
+        setTempReasoningA(res.reasoning || "No reasoning provided.");
+        return res;
+      }),
+      askParticipantDecision(pB.systemPrompt, pA.systemPrompt).then(res => {
+        logMsg(`[REASONING] ${pB.name}: \n${res.reasoning}`);
+        logMsg(`${pB.name} raw response: "${res.rawResponse}"`);
+        logMsg(`${pB.name} decided to ${res.decision.toUpperCase()}`);
+        setTempReasoningB(res.reasoning || "No reasoning provided.");
+        return res;
+      })
+    ]);
 
     const { scoreA, scoreB } = calculateScore(resA.decision, resB.decision);
 
@@ -198,6 +249,18 @@ function App() {
       reasoningB: resB.reasoning
     };
 
+    if (resA.decision === 'error' || resB.decision === 'error') {
+      logMsg('Tournament halted due to API error. Please check your API key and network.');
+      setTimeout(() => {
+        setMatchPhase('idle');
+        setGameState('setup'); // actually halt the loop
+      }, 500);
+      return;
+    }
+
+    setMatchPhase('revealing');
+    setShowParticlesA(true);
+    setShowParticlesB(true);
     setMatchResults(prev => [...prev, result]);
     
     // Update participant scores
@@ -207,20 +270,11 @@ function App() {
       return p;
     }));
 
-    if (resA.decision === 'error' || resB.decision === 'error') {
-      logMsg('Tournament halted due to API error. Please check your API key and network.');
-      setTimeout(() => {
-        setIsMatchProcessing(false);
-        setGameState('setup'); // actually halt the loop
-      }, 500);
-      return;
-    }
-
-    // Pause slightly for dramatic effect
+    // Pause slightly for dramatic effect before next match
     setTimeout(() => {
       setCurrentMatchIndex(i => i + 1);
-      setIsMatchProcessing(false);
-    }, 2000);
+      setMatchPhase('idle');
+    }, 3500);
   };
 
 
@@ -314,6 +368,7 @@ function App() {
     
     // Check if result exists for this match yet
     const result = matchResults[currentMatchIndex];
+    const isRevealing = matchPhase === 'revealing';
 
     return (
       <div className="arena animate-fade-in">
@@ -325,34 +380,54 @@ function App() {
         <div className="versus-board glass-panel">
           <div className="vs-badge">VS</div>
           
-          <div className="contender" style={{ transform: result ? 'translateX(-20px)' : 'none', transition: 'var(--transition)' }}>
-            <img src={pA.avatarUrl} className="avatar avatar-lg" alt={pA.name} />
+          <div className={`contender ${matchPhase === 'deliberating' ? 'deliberating' : ''}`} style={{ transform: result ? 'translateX(-20px)' : 'none', transition: 'var(--transition)' }}>
+            <div style={{ position: 'relative' }}>
+              <img src={pA.avatarUrl} className="avatar avatar-lg" alt={pA.name} />
+              {showParticlesA && result && <ParticleBurst decision={result.decisionA} onComplete={() => setShowParticlesA(false)} />}
+            </div>
             <div className="contender-name">{pA.name}</div>
             
             <div className="decision-box">
-              {isMatchProcessing && !result ? (
+              {matchPhase === 'deliberating' ? (
                 <div className="spinner"></div>
-              ) : result ? (
-                <div className={`badge badge-${result.decisionA}`}>
+              ) : isRevealing && result ? (
+                <div className={`badge badge-${result.decisionA} animate-fade-in`}>
                   {getDecisionEmoji(result.decisionA)} {result.decisionA.toUpperCase()}
                 </div>
               ) : null}
             </div>
+
+            {tempReasoningA && (
+              <div className="reasoning-bubble animate-fade-in">
+                <div style={{ color: 'var(--accent-primary)', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>CHAIN OF THOUGHT</div>
+                {tempReasoningA}
+              </div>
+            )}
           </div>
 
-          <div className="contender" style={{ transform: result ? 'translateX(20px)' : 'none', transition: 'var(--transition)' }}>
-            <img src={pB.avatarUrl} className="avatar avatar-lg" alt={pB.name} />
+          <div className={`contender ${matchPhase === 'deliberating' ? 'deliberating' : ''}`} style={{ transform: result ? 'translateX(20px)' : 'none', transition: 'var(--transition)' }}>
+            <div style={{ position: 'relative' }}>
+              <img src={pB.avatarUrl} className="avatar avatar-lg" alt={pB.name} />
+              {showParticlesB && result && <ParticleBurst decision={result.decisionB} onComplete={() => setShowParticlesB(false)} />}
+            </div>
             <div className="contender-name">{pB.name}</div>
             
             <div className="decision-box">
-              {isMatchProcessing && !result ? (
+              {matchPhase === 'deliberating' ? (
                 <div className="spinner"></div>
-              ) : result ? (
-                <div className={`badge badge-${result.decisionB}`}>
+              ) : isRevealing && result ? (
+                <div className={`badge badge-${result.decisionB} animate-fade-in`}>
                   {getDecisionEmoji(result.decisionB)} {result.decisionB.toUpperCase()}
                 </div>
               ) : null}
             </div>
+
+            {tempReasoningB && (
+              <div className="reasoning-bubble animate-fade-in">
+                <div style={{ color: 'var(--accent-primary)', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>CHAIN OF THOUGHT</div>
+                {tempReasoningB}
+              </div>
+            )}
           </div>
         </div>
 
@@ -410,23 +485,51 @@ function App() {
     downloadAnchorNode.remove();
   };
 
+  const exportHtml = async () => {
+    try {
+      // Fetch the CSS content to inline it
+      // In a real build, we might need a more robust way to get styles, but for dev/vite this works to grab injected styles or we can fetch index.css directly.
+      const cssRes = await fetch('/src/index.css'); 
+      const cssContent = await cssRes.text();
+      
+      const htmlContent = generateStandaloneHtml(participants, matchResults, cssContent);
+      const dataStr = "data:text/html;charset=utf-8," + encodeURIComponent(htmlContent);
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "tournament_export_" + Date.now() + ".html");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+    } catch (e) {
+      console.error("Failed to export HTML:", e);
+      alert("Failed to export HTML. See console for details.");
+    }
+  };
+
   const renderLeaderboard = () => {
     const sorted = [...participants].sort((a, b) => b.score - a.score);
 
     const getStats = (participantId: string) => {
       let wins = 0, draws = 0, losses = 0;
+      let cooperates = 0, defects = 0;
       matchResults.forEach(r => {
         if (r.participantAId === participantId) {
           if (r.scoreA > r.scoreB) wins++;
           else if (r.scoreA === r.scoreB) draws++;
           else losses++;
+          
+          if (r.decisionA === 'cooperate') cooperates++;
+          if (r.decisionA === 'defect') defects++;
         } else if (r.participantBId === participantId) {
           if (r.scoreB > r.scoreA) wins++;
           else if (r.scoreB === r.scoreA) draws++;
           else losses++;
+
+          if (r.decisionB === 'cooperate') cooperates++;
+          if (r.decisionB === 'defect') defects++;
         }
       });
-      return { wins, draws, losses };
+      return { wins, draws, losses, cooperates, defects };
     };
 
     return (
@@ -446,8 +549,11 @@ function App() {
                 <img src={p.avatarUrl} alt={p.name} className="avatar" />
                 <div className="participant-info" style={{ flex: 1 }}>
                   <div className="participant-name">{p.name}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                    {getStats(p.id).wins}W - {getStats(p.id).draws}D - {getStats(p.id).losses}L
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>
+                    {getStats(p.id).wins} {getStats(p.id).wins === 1 ? 'win' : 'wins'} - {getStats(p.id).draws} {getStats(p.id).draws === 1 ? 'draw' : 'draws'} - {getStats(p.id).losses} {getStats(p.id).losses === 1 ? 'loss' : 'losses'}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>
+                    🤝 Cooperated: {getStats(p.id).cooperates} | ⚔️ Defected: {getStats(p.id).defects}
                   </div>
                 </div>
                 <div className="leaderboard-score">{p.score} Pts</div>
@@ -461,7 +567,15 @@ function App() {
               onClick={downloadResults}
               style={{ flex: 1, justifyContent: 'center' }}
             >
-              Download JSON
+              Export JSON
+            </button>
+
+            <button 
+              className="btn-secondary" 
+              onClick={exportHtml}
+              style={{ flex: 1, justifyContent: 'center', borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }}
+            >
+              Export HTML Log
             </button>
 
             <button 
